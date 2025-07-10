@@ -1,20 +1,10 @@
-import mongoose from "mongoose";
 import { logger } from "./logger.config";
 
-import { MongoClient } from "mongodb";
+import { MongoClient, Db } from "mongodb";
 
-export const connectDB=async()=>{
-    try {
-        await mongoose.connect(process.env.MONGO_URI||"")
-        logger.info("MongoDB Connected")
-    } catch (error) {
-        logger.error(error)
-        process.exit(1)
-    }
-}
+export const client=new MongoClient(process.env.MONGO_URI||"")
 
-const client=new MongoClient(process.env.MONGO_URI||"")
-
-const db=client.db("Mau")
+export const db:Db=client.db("Mau")
 
 export const contactCollection=db.collection("contacts")
+export const agendaCollection=db.collection("agendaJobs")

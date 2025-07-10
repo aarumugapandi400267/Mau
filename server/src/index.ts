@@ -2,8 +2,9 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv'
 import functionalRoutes from './routes/functional.route'
-import { logger, connectDB } from './config';
+import { logger } from './config';
 import agenda from './utils/agenda.util';
+import { client } from './config/db.config';
 
 dotenv.config({
   path: ".env"
@@ -23,14 +24,18 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT;
 
-connectDB()
+client.connect()
   .then(() => {
-    agenda.start();
+    logger.info("MongoDB Connected")
+  })
+  .then(async () => {
+    await agenda.start();
+
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     })
   })
   .catch((err) => {
-    logger.error("Failed to Connect to DB")
+    logger.error("Failed to Connect to DB. "+err)
     process.exit(1)
   })

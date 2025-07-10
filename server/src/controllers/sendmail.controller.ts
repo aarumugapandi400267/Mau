@@ -1,10 +1,9 @@
+import cronstrue from "cronstrue";
 import { Request, Response } from "express";
 import { transport, logger, contactCollection } from "../config";
 import { MailOptions, cosineSimilarity } from "../utils/common.utils";
 import { summarizer, embeddingModel } from "../config/gemini.config"
-import { Contact } from "../models";
 import agenda from "../utils/agenda.util";
-import { parse } from "path";
 
 export const sendmail = async (req: Request, res: Response): Promise<any> => {
 	try {
@@ -38,7 +37,8 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			to (string): Extract the recipient's name from the text.
 			subject (string): Generate a subject line.
 			html (string): Compose a rich HTML email body using modern and elegant design (semantic tags, inline styles, and color theme appropriate to the context). If the input lacks detail, infer a suitable tone and content. Use high-end formatting.
-			scheduledDate (string): Extract an ISO 8601 date-time string if mentioned and if mentioned like tomorrow or next month, ${currentDateTime} is the current data time, then calculate the date using from this date or if mentioned like now return empty string.
+			every (boolean): If the email is to be sent like every day, every week or every month, set this to true, otherwise false.
+			scheduledDate (string): Extract scheduledDate as ISO 8601 if a specific time is mentioned (use ${currentDateTime} for relative terms like "tomorrow"), return a cron string for recurring phrases (like "every Friday"), and return "" for "now" or if no time is given.
 
 			Constraints:
 			- The sender's name is Aarumugapandi. Use that tone and style.
@@ -48,7 +48,8 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			"to": "toaddress",
 			"subject": "subject",
 			"html": "body",
-			"scheduledDate": "ISO 8601 timestamp string"
+			"scheduledDate": "ISO 8601 timestamp string | cron expression | empty string",
+			"every": true/false
 			}
 
 			Input Text:
@@ -77,7 +78,11 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 					text: {
 						query: parsed.to,
 						path: ["name", "email"],
-						fuzzy: { maxEdits: 1 }
+						fuzzy: {
+							maxEdits: 2,
+							prefixLength: 0,
+							maxExpansions: 50
+						}
 					}
 				}
 			},
@@ -97,16 +102,18 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 		};
 
 		if (parsed.scheduledDate) {
-			const date = new Date(parsed.scheduledDate);
-			
-			if (isNaN(date.getTime())) {
-				return res.status(400).json({ message: "Invalid scheduled date." });
+
+			logger.info("📨 Email will sent to " + parsed.to + " at " + cronstrue.toString(parsed.scheduledDate));
+
+			if (parsed.every) {
+				logger.info("📅 Email will be sent " + cronstrue.toString(parsed.scheduledDate));
+				await agenda.every(parsed.scheduledDate, "send_email", { options });
+			} else {
+				logger.info("📅 Email will be sent at " + cronstrue.toString(parsed.scheduledDate));
+				const date = new Date(parsed.scheduledDate);
+				await agenda.schedule(date, "send_email", { options });
 			}
-
-			logger.info("📨 Email will sent to " + parsed.to + " at " + parsed.scheduledDate);
-
-			await agenda.schedule(date, "send_email", { options });
-			res.send(`📅 Email scheduled successfully for ${parsed.scheduledDate}.`);
+			res.send(`📅 Email scheduled successfully for ${cronstrue.toString(parsed.scheduledDate)}.`);
 		} else {
 			const info = await transport.sendMail(options);
 			logger.info("📨 Email sent immediately: " + info?.response);

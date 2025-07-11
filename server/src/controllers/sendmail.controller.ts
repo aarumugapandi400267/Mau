@@ -39,6 +39,8 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			html (string): Compose a rich HTML email body using modern and elegant design (semantic tags, inline styles, and color theme appropriate to the context). If the input lacks detail, infer a suitable tone and content. Use high-end formatting.
 			every (boolean): If the email is to be sent like every day, every week or every month, set this to true, otherwise false.
 			scheduledDate (string): Extract scheduledDate as ISO 8601 if a specific time is mentioned (use ${currentDateTime} for relative terms like "tomorrow"), return a cron string for recurring phrases (like "every Friday"), and return "" for "now" or if no time is given.
+			clear (boolean): If the scheduledDate or every is not clear, make it to false else true
+			description (string): Generate the description or reason for the email or failed reason.
 
 			Constraints:
 			- The sender's name is Aarumugapandi. Use that tone and style.
@@ -49,8 +51,11 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			"subject": "subject",
 			"html": "body",
 			"scheduledDate": "ISO 8601 timestamp string | cron expression | empty string",
-			"every": true/false
+			"every": true/false,
+			"clear": true/false,
+			"description": "description"
 			}
+
 
 			Input Text:
 			[START]
@@ -100,11 +105,18 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			subject: parsed.subject,
 			html: parsed.html
 		};
-
+		console.log(parsed)
 		if (parsed.scheduledDate) {
 
 			logger.info("📨 Email will sent to " + parsed.to + " at " + cronstrue.toString(parsed.scheduledDate));
-
+			console.log(parsed.clear)
+			if (!parsed.clear){
+				logger.warn("Not the clear information")
+				return res.status(400).json({
+					message:parsed.description
+				})
+			} 
+			
 			if (parsed.every) {
 				logger.info("📅 Email will be sent " + cronstrue.toString(parsed.scheduledDate));
 				await agenda.every(parsed.scheduledDate, "send_email", { options });
@@ -120,7 +132,7 @@ export const sendUsingMau = async (req: Request, res: Response): Promise<any> =>
 			res.send(parsed.html);
 		}
 	} catch (error) {
-		logger.error("Error in sendUsingMau:", error);
+		logger.error("Error in send using Mau:", error);
 		return res.status(500).json({ message: "Internal server error" });
 	}
 };
